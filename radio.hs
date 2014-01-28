@@ -3,6 +3,7 @@ module Main where
 
 import Control.Monad
 import Control.Monad.STM
+import Control.Concurrent
 import Data.Conduit
 import Data.Conduit.Process.Unix (forkExecuteFile, waitForProcess)
 import Data.Conduit.TMChan
@@ -77,3 +78,11 @@ radio c = do
 app input _ = do
   chan <- atomically $ dupTMChan input
   return $ responseSource status200 [] $ sourceTMChan chan
+
+main = do
+  r <- atomically $ newBroadcastTMChan
+  forkIO queue
+  forkIO $ radio r
+
+  _ <- run 3000 (app r)
+  return ()
