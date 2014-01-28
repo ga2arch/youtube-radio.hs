@@ -2,10 +2,16 @@
 module Main where
 
 import Control.Monad
+import Data.Conduit
 import Data.Conduit.Process.Unix (forkExecuteFile, waitForProcess)
+import Data.Conduit.TMChan
 import System.IO (readFile)
 import System.Process (readProcess)
 import System.Random (randomRIO)
+
+import qualified Blaze.ByteString.Builder.ByteString as BBB
+import qualified Data.Conduit.Binary as CB
+import qualified Data.Conduit.List as CL
 import qualified Data.ByteString.UTF8 as BU
 
 --------------------------------------
@@ -57,3 +63,9 @@ queue = do
   queue
   where
     pick xs = randomRIO (0, (length xs - 1)) >>= return . (xs !!)
+
+radio c = do
+  runResourceT $
+    CB.sourceFile "/tmp/radio.mp3"
+    $= CL.map (Chunk . BBB.fromByteString)
+    $$ sinkTMChan c False
