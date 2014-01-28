@@ -2,9 +2,13 @@
 module Main where
 
 import Control.Monad
+import Control.Monad.STM
 import Data.Conduit
 import Data.Conduit.Process.Unix (forkExecuteFile, waitForProcess)
 import Data.Conduit.TMChan
+import Network.Wai
+import Network.Wai.Handler.Warp
+import Network.HTTP.Types (status200)
 import System.IO (readFile)
 import System.Process (readProcess)
 import System.Random (randomRIO)
@@ -69,3 +73,7 @@ radio c = do
     CB.sourceFile "/tmp/radio.mp3"
     $= CL.map (Chunk . BBB.fromByteString)
     $$ sinkTMChan c False
+
+app input _ = do
+  chan <- atomically $ dupTMChan input
+  return $ responseSource status200 [] $ sourceTMChan chan
