@@ -3,7 +3,9 @@ module Main where
 
 import Control.Monad
 import Data.Conduit.Process.Unix (forkExecuteFile, waitForProcess)
+import System.IO (readFile)
 import System.Process (readProcess)
+import System.Random (randomRIO)
 import qualified Data.ByteString.UTF8 as BU
 
 --------------------------------------
@@ -47,3 +49,11 @@ streamUrl yurl = do
     l <- lame
     _ <- waitForProcess l
     return()
+
+queue = do
+  yurls <- fmap lines (readFile "playlist")
+  yurl <- pick yurls
+  streamUrl yurl
+  queue
+  where
+    pick xs = randomRIO (0, (length xs - 1)) >>= return . (xs !!)
