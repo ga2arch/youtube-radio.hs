@@ -6,7 +6,7 @@ import Data.Conduit.Process.Unix (forkExecuteFile)
 import qualified Data.ByteString.UTF8 as BU
 
 mpv url = do
-  mpv <- forkExecuteFile
+  p <- forkExecuteFile
          "mpv"
          ["--no-video",
           "-ao",
@@ -18,4 +18,15 @@ mpv url = do
          Nothing
          Nothing
          Nothing
-  return mpv
+  return p
+
+lame mpvStdout radioOut = do
+  p <- forkExecuteFile
+          "lame"
+          ["--quiet", "/tmp/pipe.mp3", "/tmp/radio.mp3"]
+          Nothing
+          Nothing
+          Nothing
+          Nothing
+          Nothing
+  return p
