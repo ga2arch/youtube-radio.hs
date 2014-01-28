@@ -11,8 +11,10 @@ import Network.Wai
 import Network.Wai.Handler.Warp
 import Network.HTTP.Types (status200)
 import System.IO (readFile)
+import System.Directory
 import System.Process (readProcess)
 import System.Random (randomRIO)
+import System.Posix.Files
 
 import qualified Blaze.ByteString.Builder.ByteString as BBB
 import qualified Data.Conduit.Binary as CB
@@ -51,6 +53,10 @@ lame = do
 
 --------------------------------------
 
+cleanUp = do
+  removeFile "/tmp/pipe.mp3"
+  createNamedPipe "/tmp/pipe.mp3" namedPipeMode
+
 streamUrl yurl = do
   tmp <- readProcess "youtube-dl" ["-g", yurl] []
   let url = take (length tmp - 1) tmp
@@ -65,6 +71,7 @@ queue = do
   yurls <- fmap lines (readFile "playlist")
   yurl <- pick yurls
   streamUrl yurl
+  cleanUp
   queue
   where
     pick xs = randomRIO (0, (length xs - 1)) >>= return . (xs !!)
