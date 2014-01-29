@@ -56,20 +56,20 @@ lame mpvStdout stdout = do
 --------------------------------------
 
 streamUrl yurl = do
-  --tmp <- readProcess "youtube-dl" ["-g", (BU.toString yurl)] []
-  --let url = take (length tmp - 1) tmp
+  tmp <- readProcess "youtube-dl" ["-g", (BU.toString yurl)] []
+  let url = take (length tmp - 1) tmp
 
-  putStrLn (BU.toString yurl)
+  putStrLn url
 
   mpvOut <- atomically $ newTBMChan 16
   lameOut <- atomically $ newTBMChan 16
 
---when (url !! 4 /= 's') $ do
-  m <- mpv (BU.toString yurl) mpvOut
-  l <- lame mpvOut lameOut
-  return (m, l, lameOut)
-
-  --return ()
+  if (url !! 4 == 's')
+    then streamUrl yurl
+    else do
+      m <- mpv url mpvOut
+      l <- lame mpvOut lameOut
+      return (m, l, lameOut)
 
 app req = do
   let query = queryString req
