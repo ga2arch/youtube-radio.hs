@@ -1,62 +1,44 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import Control.Monad
 import Control.Monad.STM
-import Control.Concurrent
 import Data.Conduit
 import Data.Conduit.Process.Unix
 import Data.Conduit.TMChan
-import GHC.IO.Handle.FD
 import Network.Wai
 import Network.Wai.Handler.Warp
 import Network.HTTP.Types (status200)
 import System.IO
-import System.Directory
+import System.Environment
 import System.Process (readProcess)
-import System.Random (randomRIO)
-import System.Posix.Files
 
 import qualified Blaze.ByteString.Builder.ByteString as BBB
-import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.UTF8 as BU
 import qualified Data.Conduit.Binary as CB
 import qualified Data.Conduit.List as CL
-import qualified Data.ByteString.UTF8 as BU
 
 --------------------------------------
 
-mpv url stdout = do
-  p <- forkExecuteFile
-         "mpv"
-         ["--no-video",
-          "-ao",
-          "pcm:file=/dev/stdout",
-          "--really-quiet",
-          (BU.fromString url)]
-         Nothing
-         Nothing
-         Nothing
-         (Just $ sinkTBMChan stdout False)
-         Nothing
-  return p
-
-lame mpvStdout stdout = do
-  p <- forkExecuteFile
-          "lame"
-          ["--quiet",
-           "-",
-           "-"]
-          Nothing
-          Nothing
-          (Just $ sourceTBMChan mpvStdout)
-          (Just $ sinkTBMChan stdout False)
-          Nothing
-  return p
+ffmpeg url out = do
+  f <- forkExecuteFileSource
+       "ffmpeg"
+       ["-i",
+        (BU.fromString url)
+       "-vn",
+       "-f",
+       "mp3",
+       "-"]
+       Nothing
+       Nothing
+       Nothing
+       (Just $ sinkTBMChan out False)
+       Nothing
+  return f
 
 --------------------------------------
 
 streamUrl yurl = do
-  tmp <- readProcess "youtube-dl" ["-g", (BU.toString yurl)] []
+  tmp <- readProcess "youtube-dl" ["-g", yurl] []
   let url = take (length tmp - 1) tmp
 
   putStrLn url
@@ -68,8 +50,8 @@ streamUrl yurl = do
     then streamUrl yurl
     else do
       m <- mpv url mpvOut
-      l <- lame mpvOut lameOut
-      return (m, l, lameOut)
+      l <- lame mpvOut
+      return ()
 
 app req = do
   let query = queryString req
