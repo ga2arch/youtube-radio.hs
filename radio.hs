@@ -32,14 +32,20 @@ youtubeDl yurl = do
   out <- atomically $ newTBMChan 16
   y <- forkExecuteFile "youtube-dl"
        ["-g", (BU.fromString yurl)]
-       Nothing Nothing Nothing (Just $ sinkTBMChan out True) Nothing
-  url <- sourceTBMChan out $$ CB.sinkLbs
+       Nothing Nothing
+       (Just $ return ())
+       (Just $ sinkTBMChan out True)
+       (Just $ CL.sinkNull)
+  url <- runResourceT $ sourceTBMChan out $$ CB.sinkLbs
   return url
 
 ffmpeg out url = do
   f <- forkExecuteFile "ffmpeg"
        ["-i", (toStrict . BC.init $ url), "-vn", "-f", "mp3", "-"]
-       Nothing Nothing Nothing (Just $ sinkTBMChan out False) (Just $ CL.sinkNull)
+       Nothing Nothing
+       (Just $ return ())
+       (Just $ sinkTBMChan out False)
+       (Just $ CL.sinkNull)
   _ <- waitForProcess f
   return ()
   where
@@ -56,12 +62,14 @@ app env req = do
   let info = remoteHost req
   addClient env info chan
   responseSourceBracket
-    (return ()) (\_ -> removeClient env info) (\_ -> return (status200, [], sourceTBMChan chan))
+    (return ())
+    (\_ -> removeClient env info >> (atomically $ closeTBMChan chan))
+    (\_ -> return (status200, [], sourceTBMChan chan))
 
-sendAll env b =  do
-  --print "sending"
+sendAll env b = do
+  print "sending"
   clients <- fmap envClients $ readMVar env
-  --print $ M.keys clients
+  print $ M.keys clients
   mapM_ (\c ->
           atomically $
           writeTBMChan c (Chunk $ BBB.fromByteString b)) $ M.elems clients
@@ -87,14 +95,9 @@ queue out = do
 main = do
   env <- newMVar $ Env M.empty
   out <- atomically $ newTBMChan 1024
-  --url <- youtubeDl "http://www.youtube.com/watch?v=Ddd3BuEJf38"
-
-  --print (head . BC.toChunks . BC.init $ url)
-  --f <- ffmpeg url out
 
   forkIO $ queue out
   forkIO $ radio env out
 
-  --forkIO $ runResourceT $ sourceTBMChan out $$ CB.sinkFile "test.mp3"
   _ <- run 3000 (app env)
   return ()
