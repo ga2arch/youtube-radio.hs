@@ -3,10 +3,10 @@ module Main where
 
 import           Blaze.ByteString.Builder.Internal.Types (Builder)
 import           Control.Concurrent
+import           Control.Exception
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.STM
-import Control.Exception
 import           Data.Conduit
 import           Data.Conduit.Process.Unix
 import           Data.Conduit.TMChan
