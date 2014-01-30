@@ -1,10 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
+import           Blaze.ByteString.Builder.Internal.Types (Builder)
 import           Control.Concurrent
-import Control.Monad
+import           Control.Monad
+import           Control.Monad.IO.Class
 import           Control.Monad.STM
-import Control.Monad.IO.Class
 import           Data.Conduit
 import           Data.Conduit.Process.Unix
 import           Data.Conduit.TMChan
@@ -12,11 +13,8 @@ import           Network.HTTP.Types (status200)
 import           Network.Socket.Internal
 import           Network.Wai
 import           Network.Wai.Handler.Warp
-import           System.Environment
-import           System.IO
-import           System.Process (readProcess)
-import System.Random (randomRIO)
-import Blaze.ByteString.Builder.Internal.Types (Builder)
+import           System.Random (randomRIO)
+
 import qualified Blaze.ByteString.Builder.ByteString as BBB
 import qualified Data.ByteString.Lazy.Char8 as BC
 import qualified Data.ByteString.UTF8 as BU
