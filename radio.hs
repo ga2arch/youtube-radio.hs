@@ -52,6 +52,15 @@ ffmpeg out url = do
   where
     toStrict = head . BC.toChunks
 
+mpv input = do
+  m <- forkExecuteFile "mpv"
+       ["-"]
+       Nothing Nothing
+       (Just $ sourceTBMChan input)
+       (Just $ CL.sinkNull)
+       (Just $ CL.sinkNull)
+  return ()
+
 addClient env info chan =
   modifyMVar_ env (return . Env . M.insert info chan . envClients)
 
@@ -75,11 +84,11 @@ sendAll env b = do
           atomically $
           writeTBMChan c (Chunk $ BBB.fromByteString b)) $ M.elems clients
 
-radio env out =
+radio env out mpvIn =
   runResourceT $
     sourceTBMChan out
     $= CL.mapM (\b -> liftIO $ sendAll env b >> return b)
-    $$ CL.sinkNull
+    $$ sinkTBMChan mpvIn False
 
 queue' out = do
   print "START QUEUE"
@@ -98,9 +107,11 @@ queue out = catch (queue' out) (\(e ::SomeException) -> queue out)
 main = do
   env <- newMVar $ Env M.empty
   out <- atomically $ newTBMChan 1024
+  mpvIn <- atomically $ newTBMChan 1024
 
   forkIO $ queue out
-  forkIO $ radio env out
+  forkIO $ radio env out mpvIn
+  mpv mpvIn
 
   _ <- run 8000 (app env)
   return ()
