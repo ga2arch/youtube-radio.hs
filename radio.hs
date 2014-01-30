@@ -9,6 +9,7 @@ import           Control.Monad.STM
 import           Data.Conduit
 import           Data.Conduit.Process.Unix
 import           Data.Conduit.TMChan
+import           Data.Void
 import           System.Random (randomRIO)
 import           Streamer
 
@@ -42,6 +43,7 @@ ffmpeg out url = do
   where
     toStrict = head . BC.toChunks
 
+sinkMpv :: ConduitM BU.ByteString Void (ResourceT IO) ()
 sinkMpv = do
   input <- liftIO . atomically $ newTBMChan 1024
   m <- liftIO $ forkExecuteFile "mpv"
@@ -55,7 +57,7 @@ sinkMpv = do
            (atomically . closeTBMChan)
            ((flip sinkTBMChan) False)
 
-queue' out = do
+queue out = do
   print "START QUEUE"
   yurls <- fmap lines $ readFile "playlist"
   yurl <- pick yurls
@@ -66,14 +68,16 @@ queue' out = do
   where
     pick ls = fmap (ls !!) $ randomRIO (0, (length ls - 1))
 
-queue out = catch (queue' out) (\(e ::SomeException) -> queue out)
-
-sourceRadio = do
+sourceRadio handle = do
   out <- liftIO . atomically $ newTBMChan 1024
-  liftIO . forkIO . forever $ queue out
+  liftIO . forkIO . forever $
+    catch
+      (handle out)
+      (\(e ::SomeException) -> handle out)
+
   bracketP (return out)
            (\_ -> atomically $ closeTBMChan out)
            (sourceTBMChan)
 
 main = do
-  runResourceT $ sourceRadio $= conduitStreamer 3000 $$ sinkMpv
+  runResourceT $ sourceRadio queue $= conduitStreamer 3000 $$ sinkMpv
