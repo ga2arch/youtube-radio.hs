@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 module Main where
 
 import           Blaze.ByteString.Builder.Internal.Types (Builder)
@@ -6,6 +6,7 @@ import           Control.Concurrent
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.STM
+import Control.Exception
 import           Data.Conduit
 import           Data.Conduit.Process.Unix
 import           Data.Conduit.TMChan
@@ -80,7 +81,7 @@ radio env out =
     $= CL.mapM (\b -> liftIO $ sendAll env b >> return b)
     $$ CL.sinkNull
 
-queue out = do
+queue' out = do
   print "START QUEUE"
   yurls <- fmap lines $ readFile "playlist"
   yurl <- pick yurls
@@ -91,6 +92,8 @@ queue out = do
   queue out
   where
     pick ls = fmap (ls !!) $ randomRIO (0, (length ls - 1))
+
+queue out = catch (queue' out) (\(e ::SomeException) -> queue out)
 
 main = do
   env <- newMVar $ Env M.empty
