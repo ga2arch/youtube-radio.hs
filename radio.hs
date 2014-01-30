@@ -102,5 +102,5 @@ main = do
   forkIO $ queue out
   forkIO $ radio env out
 
-  _ <- run 3000 (app env)
+  _ <- run 8000 (app env)
   return ()
