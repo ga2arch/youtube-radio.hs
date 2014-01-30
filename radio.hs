@@ -1,7 +1,6 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, KindSignatures #-}
 module Main where
 
-import           Blaze.ByteString.Builder.Internal.Types (Builder)
 import           Control.Concurrent
 import           Control.Exception
 import           Control.Monad
@@ -10,22 +9,13 @@ import           Control.Monad.STM
 import           Data.Conduit
 import           Data.Conduit.Process.Unix
 import           Data.Conduit.TMChan
-import           Network.HTTP.Types (status200)
-import           Network.Socket.Internal
-import           Network.Wai
-import           Network.Wai.Handler.Warp
 import           System.Random (randomRIO)
+import           Streamer
 
-import qualified Blaze.ByteString.Builder.ByteString as BBB
 import qualified Data.ByteString.Lazy.Char8 as BC
 import qualified Data.ByteString.UTF8 as BU
 import qualified Data.Conduit.Binary as CB
 import qualified Data.Conduit.List as CL
-import qualified Data.Map as M
-
---------------------------------------
-
-data Env = Env { envClients :: M.Map SockAddr (TBMChan (Flush Builder)) }
 
 --------------------------------------
 
@@ -52,43 +42,18 @@ ffmpeg out url = do
   where
     toStrict = head . BC.toChunks
 
-mpv input = do
-  m <- forkExecuteFile "mpv"
-       ["-"]
+sinkMpv = do
+  input <- liftIO . atomically $ newTBMChan 1024
+  m <- liftIO $ forkExecuteFile "mpv"
+       ["-volume", "0", "-"]
        Nothing Nothing
        (Just $ sourceTBMChan input)
        (Just $ CL.sinkNull)
        (Just $ CL.sinkNull)
-  return ()
 
-addClient env info chan =
-  modifyMVar_ env (return . Env . M.insert info chan . envClients)
-
-removeClient env info =
-  modifyMVar_ env (return . Env . M.delete info . envClients)
-
-app env req = do
-  chan <- atomically $ newTBMChan 1024
-  let info = remoteHost req
-  addClient env info chan
-  responseSourceBracket
-    (return ())
-    (\_ -> removeClient env info >> (atomically $ closeTBMChan chan))
-    (\_ -> return (status200, [], sourceTBMChan chan))
-
-sendAll env b = do
-  --print "sending"
-  clients <- fmap envClients $ readMVar env
-  --print $ M.keys clients
-  mapM_ (\c ->
-          atomically $
-          writeTBMChan c (Chunk $ BBB.fromByteString b)) $ M.elems clients
-
-radio env out mpvIn =
-  runResourceT $
-    sourceTBMChan out
-    $= CL.mapM (\b -> liftIO $ sendAll env b >> return b)
-    $$ sinkTBMChan mpvIn False
+  bracketP (return input)
+           (atomically . closeTBMChan)
+           ((flip sinkTBMChan) False)
 
 queue' out = do
   print "START QUEUE"
@@ -98,20 +63,17 @@ queue' out = do
   url <- youtubeDl yurl
   print url
   unless (BC.isPrefixOf "https" url) $ ffmpeg out url
-  queue out
   where
     pick ls = fmap (ls !!) $ randomRIO (0, (length ls - 1))
 
 queue out = catch (queue' out) (\(e ::SomeException) -> queue out)
 
+sourceRadio = do
+  out <- liftIO . atomically $ newTBMChan 1024
+  liftIO . forkIO . forever $ queue out
+  bracketP (return out)
+           (\_ -> atomically $ closeTBMChan out)
+           (sourceTBMChan)
+
 main = do
-  env <- newMVar $ Env M.empty
-  out <- atomically $ newTBMChan 1024
-  mpvIn <- atomically $ newTBMChan 1024
-
-  forkIO $ queue out
-  forkIO $ radio env out mpvIn
-  mpv mpvIn
-
-  _ <- run 8000 (app env)
-  return ()
+  runResourceT $ sourceRadio $= conduitStreamer 3000 $$ sinkMpv
