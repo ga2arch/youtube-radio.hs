@@ -39,11 +39,11 @@ youtubeDl yurl = do
   return url
 
 ffmpeg out url = do
-  h <- openFile "damn" WriteMode
   f <- forkExecuteFile "ffmpeg"
        ["-i", (toStrict . BC.init $ url), "-vn", "-f", "mp3", "-"]
        Nothing Nothing Nothing (Just $ sinkTBMChan out False) (Just $ CL.sinkNull)
-  return f
+  _ <- waitForProcess f
+  return ()
   where
     toStrict = head . BC.toChunks
 
@@ -54,16 +54,16 @@ removeClient env info =
   modifyMVar_ env (return . Env . M.delete info . envClients)
 
 app env req = do
-  chan <- atomically $ newTBMChan 16
+  chan <- atomically $ newTBMChan 1024
   let info = remoteHost req
   addClient env info chan
   responseSourceBracket
     (return ()) (\_ -> removeClient env info) (\_ -> return (status200, [], sourceTBMChan chan))
 
 sendAll env b =  do
-  print "sending"
+  --print "sending"
   clients <- fmap envClients $ readMVar env
-  print $ M.keys clients
+  --print $ M.keys clients
   mapM_ (\c ->
           atomically $
           writeTBMChan c (Chunk $ BBB.fromByteString b)) $ M.elems clients
@@ -71,7 +71,7 @@ sendAll env b =  do
 radio env out =
   runResourceT $
     sourceTBMChan out
-    $= CL.mapM (\b -> liftIO $ (forkIO (sendAll env b)) >> return b)
+    $= CL.mapM (\b -> liftIO $ ((sendAll env b)) >> return b)
     $$ CL.sinkNull
 
 queue out = do
@@ -80,17 +80,15 @@ queue out = do
   yurl <- pick yurls
 
   url <- youtubeDl yurl
-  unless (BC.isPrefixOf "https" url) $ do
-    f <- ffmpeg out url
-    _ <- waitForProcess f
-    return ()
+  print url
+  unless (BC.isPrefixOf "https" url) $ ffmpeg out url
   queue out
   where
     pick ls = fmap (ls !!) $ randomRIO (0, (length ls - 1))
 
 main = do
   env <- newMVar $ Env M.empty
-  out <- atomically $ newTBMChan 16
+  out <- atomically $ newTBMChan 1024
   --url <- youtubeDl "http://www.youtube.com/watch?v=Ddd3BuEJf38"
 
   --print (head . BC.toChunks . BC.init $ url)
