@@ -71,7 +71,7 @@ sendAll env b =  do
 radio env out =
   runResourceT $
     sourceTBMChan out
-    $= CL.mapM (\b -> liftIO $ ((sendAll env b)) >> return b)
+    $= CL.mapM (\b -> liftIO $ sendAll env b >> return b)
     $$ CL.sinkNull
 
 queue out = do
