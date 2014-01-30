@@ -67,9 +67,9 @@ app env req = do
     (\_ -> return (status200, [], sourceTBMChan chan))
 
 sendAll env b = do
-  print "sending"
+  --print "sending"
   clients <- fmap envClients $ readMVar env
-  print $ M.keys clients
+  --print $ M.keys clients
   mapM_ (\c ->
           atomically $
           writeTBMChan c (Chunk $ BBB.fromByteString b)) $ M.elems clients
