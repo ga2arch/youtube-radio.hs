@@ -86,7 +86,7 @@ mergeRadios radios =
 
 runRadio radios = do
   radio <- mergeRadios radios
-  runResourceT $ radio $$ sinkFakeListener 128 (length radios)
+  runResourceT $ radio $$ sinkFakeListener 16384 (length radios)
 
 sinkFakeListener bitrate numradios =
   (CL.sequence $
