@@ -86,11 +86,11 @@ mergeRadios radios =
 
 runRadio radios = do
   radio <- mergeRadios radios
-  runResourceT $ radio $$ sinkFakeListener 16384 (length radios)
+  runResourceT $ radio $$ sinkFakeListener (1024*16)
 
-sinkFakeListener bitrate numradios =
+sinkFakeListener buffer =
   (CL.sequence $
-   (CB.drop (bitrate * numradios)
+   (CB.drop buffer
     >> (liftIO $ threadDelay $ 1000*1000)))
   =$ CL.sinkNull
 
