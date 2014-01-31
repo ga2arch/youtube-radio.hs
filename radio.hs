@@ -70,7 +70,7 @@ asmr = do
     pick ls = fmap (ls !!) $ randomRIO (0, (length ls - 1))
 
 sourceRadio handle = do
-  out <- liftIO . atomically $ newTBMChan 1024
+  out <- liftIO . atomically $ newTBMChan 128
   liftIO . forkIO . forever $ catch (do
       res <- handle
       case res of
