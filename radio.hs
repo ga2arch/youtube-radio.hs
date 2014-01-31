@@ -57,9 +57,20 @@ sinkMpv = do
            (atomically . closeTBMChan)
            ((flip sinkTBMChan) False)
 
-queue out = do
+bombz out = do
   print "START QUEUE"
-  yurls <- fmap lines $ readFile "playlist"
+  yurls <- fmap lines $ readFile "bombz"
+  yurl <- pick yurls
+
+  url <- youtubeDl yurl
+  print url
+  unless (BC.isPrefixOf "https" url) $ ffmpeg out url
+  where
+    pick ls = fmap (ls !!) $ randomRIO (0, (length ls - 1))
+
+asmr out = do
+  print "START QUEUE"
+  yurls <- fmap lines $ readFile "asmr"
   yurl <- pick yurls
 
   url <- youtubeDl yurl
@@ -80,4 +91,7 @@ sourceRadio handle = do
            (sourceTBMChan)
 
 main = do
-  runResourceT $ sourceRadio queue $= conduitStreamer 3000 $$ sinkMpv
+  (env, app) <- initServer
+  forkIO $ runResourceT $ sourceRadio bombz $= conduitStreamer env "/onlybombz" $$ sinkMpv
+  forkIO $ runResourceT $ sourceRadio asmr $= conduitStreamer env "/asmr" $$ sinkMpv
+  runServer app 3000

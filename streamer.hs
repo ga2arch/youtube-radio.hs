@@ -37,44 +37,46 @@ removeClient env mount info = modifyMVar_ env $ \m -> do
   let nmounts = M.insert mount ncls mounts
   return $ Env nmounts
 
-{-|}
-addClient env mount info chan =
-  modifyMVar_ env (return . Env . M.insert info chan . ((flip (M.!)) mount) . envMounts)
-
-removeClient env mount info =
-  modifyMVar_ env (return . Env . M.delete info . ((flip (M.!)) mount) . envMounts)
+addMount env mount = modifyMVar_ env $ \e -> do
+  let mounts = envMounts e
+  let nmounts = M.insert mount M.empty mounts
+  return $ Env nmounts
 
 sendAll env mount b = do
-  chans <- M.elems . ((flip (M.!)) mount) . envMounts <$> readMVar env
+  mounts <- envMounts <$> readMVar env
+  let chans =  M.elems $ mounts M.! mount
   mapM_
     (atomically .
      flip writeTBMChan (Chunk $ BBB.fromByteString b)) chans
 
 app env req = do
+  mounts <- envMounts <$> readMVar env
+  let mount = rawPathInfo req
+  if mount `elem` (M.keys mounts)
+     then stream env mount req
+     else return $ error404
+
+stream env mount req = do
   chan <- atomically $ newTBMChan 1024
   let info = remoteHost req
-  let path = rawPathInfo req
-
-  if M.member path $ envMounts env
-     then stream info chan
-     else error404
-
-  where
-    stream info chan =
-      responseSourceBracket
-        (addClient env info chan)
-        (\_ -> removeClient env info >> (atomically $ closeTBMChan chan))
+  responseSourceBracket
+        (addClient env mount info chan)
+        (\_ -> removeClient env mount info >> (atomically $ closeTBMChan chan))
         (\_ -> return (status200, [], sourceTBMChan chan))
-    error404 = responseSource status400 [] $
-              yield $ Chunk $ BBB.fromByteString "Error"
 
-initServer port = do
-  env <- liftIO $ newMVar $ Env M.empty
-  return $ forkIO $ run port (app env)
+error404 =
+ responseSource status400 [] $
+              yield $ Chunk $ BBB.fromByteString "No sources"
+
+initServer = do
+  env <- newMVar $ Env M.empty
+  return (env, app env)
+
+runServer app port = run port app
 
 conduitStreamer env mount = do
-  clients <- liftIO $ newMVar M.empty :: Clients
+  liftIO $ addMount env mount
   bracketP
     (return ())
-    (\id -> killThread id)
-    (\_ -> CL.mapM (\b -> liftIO $ sendAll env b >> return b)) -}
+    (\_ -> return ())
+    (\_ -> CL.mapM (\b -> liftIO $ sendAll env mount b >> return b))
