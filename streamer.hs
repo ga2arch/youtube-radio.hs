@@ -68,11 +68,10 @@ error404 =
  responseSource status400 [] $
               yield $ Chunk $ BBB.fromByteString "No sources"
 
-initServer = do
+runStreamer port = do
   env <- newMVar $ Env M.empty
-  return (env, app env)
-
-runServer app port = run port app
+  pid <- forkIO $ run port (app env)
+  return (pid, env)
 
 conduitStreamer env mount = do
   liftIO $ addMount env mount

@@ -90,16 +90,17 @@ sourceRadio handle = do
            (\_ -> atomically $ closeTBMChan out)
            (sourceTBMChan)
 
+mergeRadios radios =
+  runResourceT $ mergeSources radios 1024
+
+runRadio radios = do
+  radio <- mergeRadios radios
+  runResourceT $ radio $$ sinkMpv
+
 main = do
-  (env, app) <- initServer
-  forkIO $ runResourceT
-    $ sourceRadio bombz
-    $= conduitStreamer env "/onlybombz"
-    $$ sinkMpv
+  (pid, env) <- runStreamer 8000
 
-  forkIO $ runResourceT
-    $ sourceRadio asmr
-    $= conduitStreamer env "/asmr"
-    $$ sinkMpv
+  let radio1 = sourceRadio bombz $= conduitStreamer env "/onlybombz"
+  let radio2 = sourceRadio asmr $= conduitStreamer env "/asmr"
 
-  runServer app 8000
+  runRadio [radio1, radio2]
