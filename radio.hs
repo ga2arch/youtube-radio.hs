@@ -81,17 +81,15 @@ sourceRadio handle = do
            (\_ -> atomically $ closeTBMChan out)
            (sourceTBMChan)
 
-mergeRadios radios =
-  runResourceT $ mergeSources radios 2048
+runRadios radios = do
+  mapM_ (\radio -> forkIO .
+          runResourceT $
+          radio $$ sinkFakeListener (1024*16)) radios
 
-runRadio radios = do
-  radio <- mergeRadios radios
-  runResourceT $ radio $$ sinkFakeListener (1024*16) (length radios)
-
-sinkFakeListener bitrate numradios =
+sinkFakeListener bitrate =
   (CL.sequence $
    (CB.drop bitrate
-    >> (liftIO $ threadDelay $ 1000*1000 `div` numradios)))
+    >> (liftIO $ threadDelay $ 1000*1000)))
   =$ CL.sinkNull
 
 main = do
@@ -100,4 +98,8 @@ main = do
   let radio1 = sourceRadio bombz $= conduitStreamer env "/onlybombz"
   let radio2 = sourceRadio asmr $= conduitStreamer env "/asmr"
 
-  runRadio [radio1, radio2]
+  runRadios [radio1, radio2]
+  wait
+
+  where
+    wait = forever $ threadDelay $ 1000 * 1000 * 10
