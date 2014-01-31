@@ -94,4 +94,4 @@ main = do
   (env, app) <- initServer
   forkIO $ runResourceT $ sourceRadio bombz $= conduitStreamer env "/onlybombz" $$ sinkMpv
   forkIO $ runResourceT $ sourceRadio asmr $= conduitStreamer env "/asmr" $$ sinkMpv
-  runServer app 3000
+  runServer app 8000
