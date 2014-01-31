@@ -91,7 +91,7 @@ sourceRadio handle = do
            (sourceTBMChan)
 
 mergeRadios radios =
-  runResourceT $ mergeSources radios 1024
+  runResourceT $ mergeSources radios 2048
 
 runRadio radios = do
   radio <- mergeRadios radios
