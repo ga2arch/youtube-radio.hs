@@ -1,9 +1,10 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
 module Streamer  where
 
 import           Blaze.ByteString.Builder.Internal.Types (Builder)
 import           Control.Applicative
 import           Control.Concurrent hiding (yield)
+import           Control.Lens
 import           Control.Monad.IO.Class
 import           Control.Monad.STM
 import           Data.Conduit
@@ -21,36 +22,27 @@ import qualified Data.Map as M
 type Clients = M.Map SockAddr (TBMChan (Flush Builder))
 type Mounts = M.Map B.ByteString Clients
 
-data Env = Env { envMounts :: Mounts }
+data Env = Env { _envMounts :: Mounts }
+makeLenses ''Env
 
-addClient env mount info chan = modifyMVar_ env $ \m -> do
-  let mounts = envMounts m
-  let cls = mounts M.! mount
-  let ncls = M.insert info chan cls
-  let nmounts = M.insert mount ncls mounts
-  return $ Env nmounts
+addClient env mount info chan = modifyMVar_ env $ \e ->
+  return $ envMounts . at mount . _Just . at info ?~ chan $ e
 
-removeClient env mount info = modifyMVar_ env $ \m -> do
-  let mounts = envMounts m
-  let cls = mounts M.! mount
-  let ncls = M.delete info cls
-  let nmounts = M.insert mount ncls mounts
-  return $ Env nmounts
+removeClient env mount info = modifyMVar_ env $ \e ->
+  return $ envMounts . at mount . _Just . at info .~ Nothing $ e
 
-addMount env mount = modifyMVar_ env $ \e -> do
-  let mounts = envMounts e
-  let nmounts = M.insert mount M.empty mounts
-  return $ Env nmounts
+addMount env mount = modifyMVar_ env $ \e ->
+  return $ envMounts . at mount ?~ M.empty $ e
 
 sendAll env mount b = do
-  mounts <- envMounts <$> readMVar env
+  mounts <- _envMounts <$> readMVar env
   let chans =  M.elems $ mounts M.! mount
   mapM_
     (atomically .
      flip writeTBMChan (Chunk $ BBB.fromByteString b)) chans
 
 app env req = do
-  mounts <- envMounts <$> readMVar env
+  mounts <- _envMounts <$> readMVar env
   let mount = rawPathInfo req
   if mount `elem` (M.keys mounts)
      then stream env mount req
