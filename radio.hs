@@ -91,7 +91,7 @@ runRadio radios = do
 sinkFakeListener bitrate numradios =
   (CL.sequence $
    (CB.drop (bitrate * numradios)
-    >> (liftIO $ threadDelay 1000)))
+    >> (liftIO $ threadDelay $ 1000*1000)))
   =$ CL.sinkNull
 
 main = do
