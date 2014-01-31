@@ -75,7 +75,4 @@ runStreamer port = do
 
 conduitStreamer env mount = do
   liftIO $ addMount env mount
-  bracketP
-    (return ())
-    (\_ -> return ())
-    (\_ -> CL.mapM (\b -> liftIO $ sendAll env mount b >> return b))
+  CL.mapM (\b -> liftIO $ sendAll env mount b >> return b)
