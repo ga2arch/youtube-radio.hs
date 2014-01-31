@@ -43,48 +43,39 @@ ffmpeg out url = do
   where
     toStrict = head . BC.toChunks
 
-sinkMpv :: ConduitM BU.ByteString Void (ResourceT IO) ()
-sinkMpv = do
-  input <- liftIO . atomically $ newTBMChan 1024
-  m <- liftIO $ forkExecuteFile "mpv"
-       ["-volume", "0", "-"]
-       Nothing Nothing
-       (Just $ sourceTBMChan input)
-       (Just $ CL.sinkNull)
-       (Just $ CL.sinkNull)
-
-  bracketP (return input)
-           (atomically . closeTBMChan)
-           ((flip sinkTBMChan) False)
-
-bombz out = do
+bombz = do
   print "START QUEUE"
   yurls <- fmap lines $ readFile "bombz"
   yurl <- pick yurls
 
   url <- youtubeDl yurl
   print url
-  unless (BC.isPrefixOf "https" url) $ ffmpeg out url
+  if (BC.isPrefixOf "https" url)
+    then return Nothing
+    else return $ Just url
   where
     pick ls = fmap (ls !!) $ randomRIO (0, (length ls - 1))
 
-asmr out = do
+asmr = do
   print "START QUEUE"
   yurls <- fmap lines $ readFile "asmr"
   yurl <- pick yurls
 
   url <- youtubeDl yurl
   print url
-  unless (BC.isPrefixOf "https" url) $ ffmpeg out url
+  if (BC.isPrefixOf "https" url)
+    then return Nothing
+    else return $ Just url
   where
     pick ls = fmap (ls !!) $ randomRIO (0, (length ls - 1))
 
 sourceRadio handle = do
   out <- liftIO . atomically $ newTBMChan 1024
-  liftIO . forkIO . forever $
-    catch
-      (handle out)
-      (\(e ::SomeException) -> handle out)
+  liftIO . forkIO . forever $ catch (do
+      res <- handle
+      case res of
+          Just url -> ffmpeg out url)
+    (\(_ :: SomeException) -> return())
 
   bracketP (return out)
            (\_ -> atomically $ closeTBMChan out)
@@ -95,7 +86,13 @@ mergeRadios radios =
 
 runRadio radios = do
   radio <- mergeRadios radios
-  runResourceT $ radio $$ sinkMpv
+  runResourceT $ radio $$ sinkFakeListener 128 (length radios)
+
+sinkFakeListener bitrate numradios =
+  (CL.sequence $
+   (CB.drop (bitrate * numradios)
+    >> (liftIO $ threadDelay 1000)))
+  =$ CL.sinkNull
 
 main = do
   (pid, env) <- runStreamer 8000
