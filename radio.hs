@@ -43,22 +43,9 @@ ffmpeg out url = do
   where
     toStrict = head . BC.toChunks
 
-bombz = do
+randomPlaylist pls = do
   print "START QUEUE"
-  yurls <- fmap lines $ readFile "bombz"
-  yurl <- pick yurls
-
-  url <- youtubeDl yurl
-  print url
-  if (BC.isPrefixOf "https" url)
-    then return Nothing
-    else return $ Just url
-  where
-    pick ls = fmap (ls !!) $ randomRIO (0, (length ls - 1))
-
-asmr = do
-  print "START QUEUE"
-  yurls <- fmap lines $ readFile "asmr"
+  yurls <- fmap lines $ readFile pls
   yurl <- pick yurls
 
   url <- youtubeDl yurl
@@ -97,9 +84,13 @@ main = do
 
   let radio1 = sourceRadio bombz $= conduitStreamer env "/onlybombz"
   let radio2 = sourceRadio asmr $= conduitStreamer env "/asmr"
+  let radio3 = sourceRadio rap $= conduitStreamer env "/rap"
 
-  runRadios [radio1, radio2]
+  runRadios [radio1, radio2, radio3]
   wait
 
   where
     wait = forever $ threadDelay $ 1000 * 1000 * 10
+    bombz = randomPlaylist "bombz"
+    asmr = randomPlaylist "asmr"
+    rap = randomPlaylist "rap"
