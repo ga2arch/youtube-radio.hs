@@ -50,7 +50,7 @@ app env req = do
      else return $ error404
 
 stream env mount req = do
-  chan <- atomically $ newTBMChan 320
+  chan <- atomically $ newTBMChan 1024
   let info = remoteHost req
   responseSourceBracket
         (addClient env mount info chan)
