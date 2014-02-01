@@ -73,7 +73,7 @@ sourceRadio handle = do
 runRadios radios = do
   mapM_ (\radio -> forkIO .
           runResourceT $
-          radio $$ sinkFakeListener (1024*16)) radios
+          radio $$ sinkFakeListener (1024*40)) radios
 
 sinkFakeListener bitrate =
   (CL.sequence $
