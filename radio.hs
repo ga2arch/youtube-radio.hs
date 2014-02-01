@@ -1,4 +1,8 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, KindSignatures #-}
+{-# LANGUAGE OverloadedStrings,
+             ScopedTypeVariables,
+             KindSignatures,
+             RecordWildCards #-}
+
 module Main where
 
 import           Control.Concurrent
@@ -20,6 +24,12 @@ import qualified Data.Conduit.List as CL
 
 --------------------------------------
 
+data RadioConfig = RadioConfig
+                   { radioHandle :: IO (Maybe BC.ByteString)
+                   , radioMount  :: BU.ByteString
+                   , radioBitrate :: Int }
+--------------------------------------
+
 youtubeDl yurl = do
   out <- atomically $ newTBMChan 16
   y <- forkExecuteFile "youtube-dl"
@@ -32,10 +42,12 @@ youtubeDl yurl = do
   url <- runResourceT $ sourceTBMChan out $$ CB.sinkLbs
   return url
 
-ffmpeg out url = do
+ffmpeg out bitrate url = do
   f <- forkExecuteFile "ffmpeg"
        ["-i", (toStrict . BC.init $ url),
-        "-vn", "-f", "mp3", "-ab", "320k", "-"]
+        "-vn", "-f", "mp3",
+        "-ab", (BU.fromString $ (show bitrate) ++ "k"),
+        "-"]
        Nothing Nothing
        (Just $ return ())
        (Just $ sinkTBMChan out False)
@@ -58,37 +70,40 @@ randomPlaylist pls = do
   where
     pick ls = fmap (ls !!) $ randomRIO (0, (length ls - 1))
 
-sourceRadio handle = do
+sourceRadio bitrate handle = do
   out <- liftIO . atomically $ newTBMChan 16
   liftIO . forkIO . forever $ catch (do
       res <- handle
       case res of
-          Just url -> ffmpeg out url)
+          Just url -> ffmpeg out bitrate url)
     (\(_ :: SomeException) -> return())
 
   bracketP (return out)
            (\_ -> atomically $ closeTBMChan out)
            (sourceTBMChan)
 
-runRadios radios = do
-  mapM_ (\radio -> forkIO .
-          runResourceT $
-          radio $$ sinkFakeListener 320) radios
+runRadios env = mapM_ (forkIO . runRadio env)
+
+runRadio env (RadioConfig{..}) =
+  runResourceT $
+    sourceRadio radioBitrate radioHandle
+    $= conduitStreamer env radioMount
+    $$ sinkFakeListener radioBitrate
 
 sinkFakeListener bitrate =
   (CL.sequence $
-   (CB.drop (truncate $ 1024 * bitrate * 0.125)
+   (CB.drop (truncate $ 1024 * (fromIntegral bitrate) * 0.125)
     >> (liftIO $ threadDelay $ 1000*1000)))
   =$ CL.sinkNull
 
 main = do
   (pid, env) <- runStreamer 8000
 
-  let radio1 = sourceRadio bombz $= conduitStreamer env "/onlybombz"
-  let radio2 = sourceRadio asmr $= conduitStreamer env "/asmr"
-  let radio3 = sourceRadio rap $= conduitStreamer env "/rap"
+  let radio1 = RadioConfig bombz "/onlybombz" 320
+  let radio2 = RadioConfig asmr "/asmr" 320
+  let radio3 = RadioConfig rap "/rap" 320
 
-  runRadios [radio1, radio2, radio3]
+  runRadios env [radio1, radio2, radio3]
   wait
 
   where
