@@ -35,7 +35,7 @@ youtubeDl yurl = do
 ffmpeg out url = do
   f <- forkExecuteFile "ffmpeg"
        ["-i", (toStrict . BC.init $ url),
-        "-vn", "-f", "mp3", "-ab", "320", "-"]
+        "-vn", "-f", "mp3", "-ab", "320k", "-"]
        Nothing Nothing
        (Just $ return ())
        (Just $ sinkTBMChan out False)
