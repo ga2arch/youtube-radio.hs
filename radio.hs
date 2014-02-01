@@ -34,7 +34,8 @@ youtubeDl yurl = do
 
 ffmpeg out url = do
   f <- forkExecuteFile "ffmpeg"
-       ["-i", (toStrict . BC.init $ url), "-vn", "-f", "mp3", "-"]
+       ["-i", (toStrict . BC.init $ url),
+        "-vn", "-f", "mp3", "-ab", "320", "-"]
        Nothing Nothing
        (Just $ return ())
        (Just $ sinkTBMChan out False)
@@ -58,7 +59,7 @@ randomPlaylist pls = do
     pick ls = fmap (ls !!) $ randomRIO (0, (length ls - 1))
 
 sourceRadio handle = do
-  out <- liftIO . atomically $ newTBMChan 128
+  out <- liftIO . atomically $ newTBMChan 320
   liftIO . forkIO . forever $ catch (do
       res <- handle
       case res of
