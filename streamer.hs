@@ -10,6 +10,7 @@ import           Control.Monad.STM
 import           Data.Conduit
 import           Data.Conduit.TMChan
 import           Network.HTTP.Types (status200, status400)
+import           Network.HTTP.Types.Header (hContentType)
 import           Network.Socket.Internal
 import           Network.Wai
 import           Network.Wai.Handler.Warp
@@ -53,8 +54,11 @@ stream env mount req = do
   let info = remoteHost req
   responseSourceBracket
         (addClient env mount info chan)
-        (\_ -> removeClient env mount info >> (atomically $ closeTBMChan chan))
-        (\_ -> return (status200, [], sourceTBMChan chan))
+        (\_ -> removeClient env mount info
+               >> (atomically $ closeTBMChan chan))
+        (\_ -> return (status200,
+                       [(hContentType, "audio/mpeg")],
+                       sourceTBMChan chan))
 
 error404 =
  responseSource status400 [] $
