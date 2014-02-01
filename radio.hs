@@ -73,11 +73,11 @@ sourceRadio handle = do
 runRadios radios = do
   mapM_ (\radio -> forkIO .
           runResourceT $
-          radio $$ sinkFakeListener (1024*40)) radios
+          radio $$ sinkFakeListener 320) radios
 
 sinkFakeListener bitrate =
   (CL.sequence $
-   (CB.drop bitrate
+   (CB.drop (truncate $ 1024 * bitrate * 0.125)
     >> (liftIO $ threadDelay $ 1000*1000)))
   =$ CL.sinkNull
 
