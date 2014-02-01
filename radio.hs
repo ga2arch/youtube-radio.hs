@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings,
              ScopedTypeVariables,
              KindSignatures,
-             RecordWildCards #-}
+             RecordWildCards,
+             FlexibleContexts #-}
 
 module Main where
 
@@ -30,6 +31,7 @@ data RadioConfig = RadioConfig
                    , radioBitrate :: Int }
 --------------------------------------
 
+youtubeDl :: String -> IO (BC.ByteString)
 youtubeDl yurl = do
   out <- atomically $ newTBMChan 16
   y <- forkExecuteFile "youtube-dl"
@@ -42,6 +44,7 @@ youtubeDl yurl = do
   url <- runResourceT $ sourceTBMChan out $$ CB.sinkLbs
   return url
 
+ffmpeg :: Show a => TBMChan BU.ByteString -> a -> BC.ByteString -> IO ()
 ffmpeg out bitrate url = do
   f <- forkExecuteFile "ffmpeg"
        ["-i", (toStrict . BC.init $ url),
@@ -57,6 +60,7 @@ ffmpeg out bitrate url = do
   where
     toStrict = head . BC.toChunks
 
+randomPlaylist :: FilePath -> IO (Maybe BC.ByteString)
 randomPlaylist pls = do
   print "START QUEUE"
   yurls <- fmap lines $ readFile pls
@@ -70,6 +74,10 @@ randomPlaylist pls = do
   where
     pick ls = fmap (ls !!) $ randomRIO (0, (length ls - 1))
 
+sourceRadio
+  :: (Show a, MonadResource m) =>
+     a -> IO (Maybe BC.ByteString)
+     -> ConduitM () BU.ByteString m ()
 sourceRadio bitrate handle = do
   out <- liftIO . atomically $ newTBMChan 16
   liftIO . forkIO . forever $ catch (do
@@ -82,20 +90,28 @@ sourceRadio bitrate handle = do
            (\_ -> atomically $ closeTBMChan out)
            (sourceTBMChan)
 
+runRadios :: MVar Env -> [RadioConfig] -> IO ()
 runRadios env = mapM_ (forkIO . runRadio env)
 
+runRadio
+  :: (MonadIO m, MonadUnsafeIO m, MonadThrow m,
+      MonadBaseControl IO m) =>
+     MVar Env -> RadioConfig -> m ()
 runRadio env (RadioConfig{..}) =
   runResourceT $
     sourceRadio radioBitrate radioHandle
     $= conduitStreamer env radioMount
     $$ sinkFakeListener radioBitrate
 
+sinkFakeListener
+  :: (Integral t, MonadIO m) => t -> Sink BU.ByteString m ()
 sinkFakeListener bitrate =
   (CL.sequence $
    (CB.drop (truncate $ 1024 * (fromIntegral bitrate) * 0.125)
     >> (liftIO $ threadDelay $ 1000*1000)))
   =$ CL.sinkNull
 
+main :: IO ()
 main = do
   (pid, env) <- runStreamer 8000
 
