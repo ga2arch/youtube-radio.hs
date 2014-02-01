@@ -28,6 +28,7 @@ youtubeDl yurl = do
        (Just $ return ())
        (Just $ sinkTBMChan out True)
        (Just $ CL.sinkNull)
+  _ <- waitForProcess y
   url <- runResourceT $ sourceTBMChan out $$ CB.sinkLbs
   return url
 
