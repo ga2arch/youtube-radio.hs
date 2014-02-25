@@ -14,7 +14,6 @@ import           Control.Monad.STM
 import           Data.Conduit
 import           Data.Conduit.Process.Unix
 import           Data.Conduit.TMChan
-import           Data.Void
 import           System.Random (randomRIO)
 import           Streamer
 
@@ -83,7 +82,8 @@ sourceRadio bitrate handle = do
   liftIO . forkIO . forever $ catch (do
       res <- handle
       case res of
-          Just url -> ffmpeg out bitrate url)
+          Just url -> ffmpeg out bitrate url
+          Nothing  -> return ())
     (\(_ :: SomeException) -> return())
 
   bracketP (return out)
